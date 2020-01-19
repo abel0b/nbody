@@ -1,25 +1,31 @@
-all: nbody nbody-openacc nbody-cuda nbody-cuda-structofarray
-
-nbody: nbody.c
-	gcc nbody.c -o nbody -lm -fopenmp -O3
-
-nbody-openacc: nbody-openacc.c
-	pgcc -acc nbody-openacc.c -o nbody-openacc -lm -O3
-
-nbody-cuda: nbody-cuda.cu
-ifdef dump
-	nvcc -DDUMP nbody-cuda.cu -o nbody-cuda -lm
-else
-	nvcc nbody-cuda.cu -o nbody-cuda -lm
+cflags = -Iinclude -lm
+ifndef nodump
+	cflags += -DDUMP
 endif
 
-nbody-cuda-structofarray: nbody-cuda-structofarray.cu
-ifdef dump
-	nvcc -DDUMP $< -o $@ -lm
-else
-	nvcc $< -o $@ -lm
-endif
+.PHONY: all
+all: bin/nbody-baseline bin/nbody-openacc bin/nbody-cuda bin/nbody-cuda-soa bin/nbody-compare
 
+bin/nbody-baseline: src/nbody.c
+	gcc $(cflags) -DVERSION='"baseline"' $^ -o $@ -fopenmp -O3
+
+bin/nbody-openacc: src/nbody-openacc.c
+	pgcc $(cflags) -DVERSION='"openacc"' -acc $^ -o $@ -O3
+
+bin/nbody-cuda: src/nbody-cuda.cu
+	nvcc $(cflags) -DVERSION='"cuda"' $^ -o $@
+
+bin/nbody-cuda-soa: src/nbody-cuda-soa.cu
+	nvcc $(cflags) -DVERSION='"cuda-soa"' $^ -o $@
+
+bin/nbody-compare: test/nbody-compare.c
+	gcc $(cflags) $^ -o $@
+
+.PHONY: test
+test: all
+	./test/test.sh
+
+.PHONY: clean
 clean:
-	rm -f nbody nbody-openacc nbody-cuda nbody-cuda-structofarray *.txt
+	rm -f bin/* data/*.nbody *.txt
 

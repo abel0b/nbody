@@ -2,13 +2,9 @@
 #include <math.h>
 #include <stdlib.h> // drand48
 #include <omp.h>
+#include "nbody.h"
 
-//#define DUMP
-
-struct ParticleType { 
-  float x, y, z;
-  float vx, vy, vz; 
-};
+enum Initializer initializer = RANDOM_INITIALIZER;
 
 void MoveParticles(const int nParticles, struct ParticleType* const particle, const float dt) {
 
@@ -54,9 +50,8 @@ void MoveParticles(const int nParticles, struct ParticleType* const particle, co
     particle[i].z  += particle[i].vz*dt;
   }
 }
-
-void dump(int iter, int nParticles, struct ParticleType* particle)
-{
+ 
+void dump_text(int iter, int nParticles, struct ParticleType* particle) {
     char filename[64];
     snprintf(filename, 64, "output_%d.txt", iter);
 
@@ -72,6 +67,31 @@ void dump(int iter, int nParticles, struct ParticleType* particle)
     }
 
     fclose(f);
+}
+
+void dump(int iter, int nParticles, struct ParticleType* particle) {
+    char filename[64];
+    snprintf(filename, 64, "data/%s-%d.nbody", VERSION, iter);
+    
+    FILE * output;
+    output = fopen(filename, "wb");
+
+    fwrite(&initializer, sizeof(enum Initializer), 1, output);
+    fwrite(&nParticles, sizeof(int), 1, output);
+    fwrite(&iter, sizeof(int), 1, output);
+
+    int i;
+    for (i = 0; i < nParticles; i++)
+    {
+        fwrite(&particle[i].x, sizeof(float), 1, output);
+        fwrite(&particle[i].y, sizeof(float), 1, output);
+        fwrite(&particle[i].z, sizeof(float), 1, output);
+        fwrite(&particle[i].vx, sizeof(float), 1, output);
+        fwrite(&particle[i].vy, sizeof(float), 1, output);
+        fwrite(&particle[i].vz, sizeof(float), 1, output);
+    }
+
+    fclose(output);
 }
 
 int main(const int argc, const char** argv)

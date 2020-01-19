@@ -3,21 +3,16 @@
 #include <stdlib.h> // drand48
 #include <omp.h>
 #include <sys/time.h>
+#include "nbody.h"
 
-struct ParticleArray {
-    float * x;
-    float * y;
-    float * z;
-    float * vx;
-    float * vy;
-    float * vz; 
-};
+enum Initializer initializer = RANDOM_INITIALIZER;
 
-__global__ void UpdateParticle(const int nParticles, struct ParticleArray * const particle, const float dt) {
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
+__global__ void UpdateParticle(const int nParticles, struct ParticleType * const particle, const float dt) {
+    int i; 
+    int stride = blockDim.x * gridDim.x;
 
     // Loop over particles that experience force
-    while (i < nParticles) {
+    for (i = blockIdx.x * blockDim.x + threadIdx.x; i < nParticles; i += stride) {
         // Components of the gravity force on particle i
     	float Fx = 0, Fy = 0, Fz = 0; 
       
@@ -29,9 +24,9 @@ __global__ void UpdateParticle(const int nParticles, struct ParticleArray * cons
 		        const float softening = 1e-20;
 
                 // Newton's law of universal gravity
-                const float dx = particle->x[j] - particle->x[i];
-                const float dy = particle->y[j] - particle->y[i];
-                const float dz = particle->z[j] - particle->z[i];
+                const float dx = particle[j].x - particle[i].x;
+                const float dy = particle[j].y - particle[i].y;
+                const float dz = particle[j].z - particle[i].z;
                 const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
                 const float drPower32  = pow(drSquared, 3.0/2.0);
                 
@@ -43,79 +38,80 @@ __global__ void UpdateParticle(const int nParticles, struct ParticleArray * cons
         }
 
         // Accelerate particles in response to the gravitational force
-        particle->vx[i] += dt*Fx; 
-        particle->vy[i] += dt*Fy; 
-        particle->vz[i] += dt*Fz;
-        i += blockDim.x * gridDim.x;
+        particle[i].vx += dt*Fx; 
+        particle[i].vy += dt*Fy; 
+        particle[i].vz += dt*Fz;
     }
 }
 
-void MoveParticles(const int nParticles, struct ParticleArray * const particle, const float dt) {
-    struct ParticleArray * gpu_particle;
-    cudaMalloc(&gpu_particle, sizeof(struct ParticleArray));
-    cudaMemcpy(particle, gpu_particle, sizeof(struct ParticleArray), cudaMemcpyHostToDevice);
+void MoveParticles(const int nParticles, struct ParticleType* const particle, const float dt) {
+    struct ParticleType * gpu_particle;
+    cudaMalloc(&gpu_particle, sizeof(struct ParticleType) * nParticles);
+    cudaMemcpy(gpu_particle, particle, sizeof(struct ParticleType) * nParticles, cudaMemcpyHostToDevice);
   
-    UpdateParticle<<<1,nParticles>>>(nParticles, gpu_particle, dt);
+    UpdateParticle<<<(nParticles+255)/256,256>>>(nParticles, gpu_particle, dt);
   
-    cudaMemcpy(gpu_particle, particle, sizeof(struct ParticleArray), cudaMemcpyDeviceToHost);
+    cudaMemcpy(particle, gpu_particle, sizeof(struct ParticleType) * nParticles, cudaMemcpyDeviceToHost);
 
     // Move particles according to their velocities
     // O(N) work, so using a serial loop
     for (int i = 0 ; i < nParticles; i++) { 
-        particle->x[i]  += particle->vx[i]*dt;
-        particle->y[i]  += particle->vy[i]*dt;
-        particle->z[i]  += particle->vz[i]*dt;
+        particle[i].x  += particle[i].vx*dt;
+        particle[i].y  += particle[i].vy*dt;
+        particle[i].z  += particle[i].vz*dt;
     }
 }
 
-void dump(int iter, int nParticles, struct ParticleArray * particle)
-{
+void dump(int iter, int nParticles, struct ParticleType* particle) {
     char filename[64];
-    snprintf(filename, 64, "output_%d.txt", iter);
+    snprintf(filename, 64, "data/%s-%d.nbody", VERSION, iter);
+    
+    FILE * output;
+    output = fopen(filename, "wb");
 
-    FILE *f;
-    f = fopen(filename, "w+");
+    fwrite(&initializer, sizeof(enum Initializer), 1, output);
+    fwrite(&nParticles, sizeof(int), 1, output);
+    fwrite(&iter, sizeof(int), 1, output);
 
     int i;
     for (i = 0; i < nParticles; i++)
     {
-        fprintf(f, "%e %e %e %e %e %e\n",
-                   particle->x[i], particle->y[i], particle->z[i],
-		   particle->vx[i], particle->vy[i], particle->vz[i]);
+        fwrite(&particle[i].x, sizeof(float), 1, output);
+        fwrite(&particle[i].y, sizeof(float), 1, output);
+        fwrite(&particle[i].z, sizeof(float), 1, output);
+        fwrite(&particle[i].vx, sizeof(float), 1, output);
+        fwrite(&particle[i].vy, sizeof(float), 1, output);
+        fwrite(&particle[i].vz, sizeof(float), 1, output);
     }
 
-    fclose(f);
+    fclose(output);
 }
 
 int main(const int argc, const char** argv)
 {
-    // Problem size and other parameters
-    const int nParticles = (argc > 1 ? atoi(argv[1]) : 16384);
-    // Duration of test
-    const int nSteps = (argc > 2)?atoi(argv[2]):10;
-    // Particle propagation time step
-    const float dt = 0.0005f;
 
-    struct ParticleArray particle;
-    particle.x = (float *)malloc(nParticles * sizeof(float));
-    particle.y = (float *)malloc(nParticles * sizeof(float));
-    particle.z = (float *)malloc(nParticles * sizeof(float));
-    particle.vx = (float *)malloc(nParticles * sizeof(float));
-    particle.vy = (float *)malloc(nParticles * sizeof(float));
-    particle.vz = (float *)malloc(nParticles * sizeof(float));
+  // Problem size and other parameters
+  const int nParticles = (argc > 1 ? atoi(argv[1]) : 16384);
+  // Duration of test
+  const int nSteps = (argc > 2)?atoi(argv[2]):10;
+  // Particle propagation time step
+  const float dt = 0.0005f;
 
-    // Initialize random number generator and particles
-    srand48(0x2020);
+  struct ParticleType * particle = (struct ParticleType *)malloc(nParticles * sizeof(struct ParticleType));
 
-    int i;
-    for (i = 0; i < nParticles; i++) {
-        particle.x[i] =  2.0*drand48() - 1.0;
-        particle.y[i] =  2.0*drand48() - 1.0;
-        particle.z[i] =  2.0*drand48() - 1.0;
-        particle.vx[i] = 2.0*drand48() - 1.0;
-        particle.vy[i] = 2.0*drand48() - 1.0;
-        particle.vz[i] = 2.0*drand48() - 1.0;
-    }
+  // Initialize random number generator and particles
+  srand48(0x2020);
+
+  int i;
+  for (i = 0; i < nParticles; i++)
+  {
+     particle[i].x =  2.0*drand48() - 1.0;
+     particle[i].y =  2.0*drand48() - 1.0;
+     particle[i].z =  2.0*drand48() - 1.0;
+     particle[i].vx = 2.0*drand48() - 1.0;
+     particle[i].vy = 2.0*drand48() - 1.0;
+     particle[i].vz = 2.0*drand48() - 1.0;
+  }
   
   // Perform benchmark
   printf("\nPropagating %d particles using 1 thread...\n\n", 
@@ -128,7 +124,7 @@ int main(const int argc, const char** argv)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     const double tStart = tv.tv_sec + tv.tv_usec / 1000000.0; // Start timing
-    MoveParticles(nParticles, &particle, dt);
+    MoveParticles(nParticles, particle, dt);
     gettimeofday(&tv, NULL);
     const double tEnd =  tv.tv_sec + tv.tv_usec / 1000000.0; // End timing
 
@@ -155,13 +151,8 @@ int main(const int argc, const char** argv)
 	 "Average performance:", "", rate, dRate);
   printf("-----------------------------------------------------\n");
   printf("* - warm-up, not included in average\n\n");
-  
-  free(particle.x);
-  free(particle.y);
-  free(particle.z);
-  free(particle.vx);
-  free(particle.vy);
-  free(particle.vz);
+  free(particle);
+    return EXIT_SUCCESS;
 }
 
 
