@@ -4,7 +4,10 @@ ifndef nodump
 endif
 
 .PHONY: all
-all: bin/nbody-baseline bin/nbody-openacc bin/nbody-cuda bin/nbody-cuda-soa bin/nbody-compare
+all: data/nbody bin/nbody-baseline bin/nbody-openacc bin/nbody-cuda bin/nbody-cuda-soa bin/nbody-compare
+
+data/nbody:
+	mkdir -p data/nbody
 
 bin/nbody-baseline: src/nbody.c
 	gcc $(cflags) -DVERSION='"baseline"' $^ -o $@ -fopenmp -O3
@@ -24,6 +27,10 @@ bin/nbody-compare: test/nbody-compare.c
 .PHONY: test
 test: all
 	./test/test.sh
+
+.PHONY: bench
+bench: all
+	./bench/bench.sh
 
 .PHONY: clean
 clean:

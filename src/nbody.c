@@ -71,7 +71,7 @@ void dump_text(int iter, int nParticles, struct ParticleType* particle) {
 
 void dump(int iter, int nParticles, struct ParticleType* particle) {
     char filename[64];
-    snprintf(filename, 64, "data/%s-%d.nbody", VERSION, iter);
+    snprintf(filename, 64, "data/nbody/%s-%d.nbody", VERSION, iter);
     
     FILE * output;
     output = fopen(filename, "wb");

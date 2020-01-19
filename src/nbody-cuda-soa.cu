@@ -84,7 +84,7 @@ void MoveParticles(const int nParticles, struct ParticleArray * const particle, 
 
 void dump(int iter, int nParticles, struct ParticleArray * particle) {
     char filename[64];
-    snprintf(filename, 64, "data/%s-%d.nbody", VERSION, iter);
+    snprintf(filename, 64, "data/nbody/%s-%d.nbody", VERSION, iter);
     
     FILE * output;
     output = fopen(filename, "wb");
