@@ -6,7 +6,7 @@ plot_width=1080
 plot_height=720
 output_dir=./data/plot
 nb_particles=${nb_particles:-10000}
-nb_iter=${nb_iter:-5}
+nb_iter=${nb_iter:-10}
 
 set -e
 
@@ -46,7 +46,8 @@ function plot() {
     echo "set ylabel \"speedup\"" >> $output_dir/$name.conf
     echo "set boxwidth 0.5" >> $output_dir/$name.conf
     echo "set style fill solid" >> $output_dir/$name.conf
-    echo "plot \"$output_dir/speedups.dat\" using 2: xtic(1) with histogram notitle" >> $output_dir/$name.conf
+    echo "set yrange [0:]" >> $output_dir/$name.conf
+    echo "plot \"$output_dir/$name.dat\" using 2: xtic(1) with histogram notitle linecolor rgb '#006EB8'" >> $output_dir/$name.conf
     
     cat $output_dir/$name.conf | gnuplot
 
@@ -55,4 +56,7 @@ function plot() {
 }
 
 plot "baseline baseline-optimized"
-plot "baseline baseline-optimized openacc cuda cuda-soa"
+plot "baseline baseline-optimized openacc cuda cuda-soa cuda-soa-optimized"
+nb_particles=100000
+plot "cuda cuda-soa"
+plot "cuda cuda-soa cuda-soa-optimized"

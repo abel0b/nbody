@@ -12,29 +12,29 @@ FILE * output;
 #endif 
 
 __global__ void UpdateParticle(const int nParticles, struct ParticleArray * const particle, const float dt) {
+    extern __shared__ float3 local_data[];
     int i; 
     int stride = blockDim.x * gridDim.x;
     int block_id;
     int block_tid;
 
-    extern __shared__ float local_data[];
-
-    float * local_particle_x = local_data;
-    float * local_particle_y = local_data + blockDim.x * sizeof(float);
-    float * local_particle_z = local_data + 2 * blockDim.x * sizeof(float);
-
     // Loop over particles that experience force
     for (i = blockIdx.x * blockDim.x + threadIdx.x; i < nParticles; i += stride) {
         // Components of the gravity force on particle i
     	float Fx = 0, Fy = 0, Fz = 0; 
-        float myx = particle->x[i];
-        float myy = particle->y[i];
-        float myz = particle->z[i];
-
-        for(block_id = 0; block_id * blockDim.x < nParticles; block_id++) {
-            local_particle_x[threadIdx.x] = particle->x[block_id*blockDim.x+threadIdx.x];
-            local_particle_y[threadIdx.x] = particle->y[block_id*blockDim.x+threadIdx.x];
-            local_particle_z[threadIdx.x] = particle->z[block_id*blockDim.x+threadIdx.x];
+        float3 position;
+        position.x = particle->x[i];
+        position.y = particle->y[i];
+        position.z = particle->z[i];
+ 
+        for(block_id = 0; block_id*blockDim.x < nParticles; block_id++) {
+            // Read global memory
+            float3 other;
+            other.x = particle->x[block_id*blockDim.x+threadIdx.x];
+            other.y = particle->y[block_id*blockDim.x+threadIdx.x];
+            other.z = particle->z[block_id*blockDim.x+threadIdx.x];
+            // Write shared memory
+            local_data[threadIdx.x] = other;
             __syncthreads();
 
             // Loop over particles that exert force
@@ -44,9 +44,9 @@ __global__ void UpdateParticle(const int nParticles, struct ParticleArray * cons
                     const float softening = 1e-20;
 
                     // Newton's law of universal gravity
-                    const float dx = local_particle_x[block_tid] - myx;
-                    const float dy = local_particle_y[block_tid] - myy;
-                    const float dz = local_particle_z[block_tid] - myz;
+                    const float dx = local_data[block_tid].x - position.x;
+                    const float dy = local_data[block_tid].y - position.y;
+                    const float dz = local_data[block_tid].z - position.z;
                     const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
                      #ifdef OPTIMIZE_POW
                      const float drPower32  = sqrtf(drSquared * drSquared * drSquared);
@@ -90,7 +90,7 @@ void MoveParticles(const int nParticles, struct ParticleArray * const particle, 
     cudaMemcpy(gpu_particle_tmp.vy, particle->vy, sizeof(float) * nParticles, cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_particle_tmp.vz, particle->vz, sizeof(float) * nParticles, cudaMemcpyHostToDevice);
     
-    UpdateParticle<<<(nParticles+255)/256,256,sizeof(float)*3*256>>>(nParticles, gpu_particle, dt);
+    UpdateParticle<<<(nParticles+511)/512,512,sizeof(float3)*512>>>(nParticles, gpu_particle, dt);
   
     cudaMemcpy(particle->x, gpu_particle_tmp.x, sizeof(float) * nParticles, cudaMemcpyDeviceToHost); 
     cudaMemcpy(particle->y, gpu_particle_tmp.y, sizeof(float) * nParticles, cudaMemcpyDeviceToHost);
