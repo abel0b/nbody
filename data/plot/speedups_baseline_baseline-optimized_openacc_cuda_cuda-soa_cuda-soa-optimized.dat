@@ -1,7 +1,0 @@
-
-"baseline" 1.0
-"baseline-optimized" 19.36949685534591
-"openacc" 23.06928838951311
-"cuda" 384.96875
-"cuda-soa" 439.96428571428567
-"cuda-soa-optimized" 439.96428571428567

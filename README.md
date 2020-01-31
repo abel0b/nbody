@@ -1,19 +1,15 @@
 # Nbody simulation
-Accelerated nbody simulation
+Accelerated nbody simulation.
 
 ## Usage
-Compile project
-```bash
-make
+Compile project with `make`.
 
-```
-
-Run test suite
+Run test suite.
 ```bash
 make test
 ```
 
-Perform benchmarks
+Perform benchmarks and generate plots.
 ```bash
 make bench
 ```

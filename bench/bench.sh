@@ -41,7 +41,7 @@ function plot() {
 
     echo > $output_dir/speedups.conf
     echo "set terminal png size $plot_width,$plot_height" >> $output_dir/$name.conf
-    echo "set output \"$output_dir/speedups_$name.png\"" >> $output_dir/$name.conf 
+    echo "set output \"$output_dir/$name.png\"" >> $output_dir/$name.conf 
     echo "set xlabel \"version\"" >> $output_dir/$name.conf
     echo "set ylabel \"speedup\"" >> $output_dir/$name.conf
     echo "set boxwidth 0.5" >> $output_dir/$name.conf
@@ -55,8 +55,10 @@ function plot() {
     cat $output_dir/$name.dat
 }
 
-plot "baseline baseline-optimized"
-plot "baseline baseline-optimized openacc cuda cuda-soa cuda-soa-optimized"
-nb_particles=100000
+#plot "baseline baseline-optimized"
+#plot "baseline baseline-optimized openacc"
+nb_particles=50000
+#plot "openacc cuda"
+nb_particles=1000000
 plot "cuda cuda-soa"
 plot "cuda cuda-soa cuda-soa-optimized"
