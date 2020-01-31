@@ -4,10 +4,13 @@ ifndef nodump
 endif
 
 .PHONY: all
-all: data/nbody bin/nbody-baseline bin/nbody-baseline-optimized bin/nbody-openacc bin/nbody-cuda bin/nbody-cuda-soa bin/nbody-cuda-soa-optimized bin/nbody-compare
+all: bin data/nbody bin/nbody-baseline bin/nbody-baseline-optimized bin/nbody-openacc bin/nbody-cuda bin/nbody-cuda-soa bin/nbody-cuda-soa-optimized bin/nbody-compare
 
 data/nbody:
 	mkdir -p data/nbody
+
+bin:
+	mkdir bin
 
 bin/nbody-baseline: src/nbody.c
 	gcc $(cflags) -O3 -march=native -fopenmp -DVERSION='"baseline"' $^ -o $@
