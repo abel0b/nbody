@@ -5,7 +5,7 @@
 #include "nbody.h"
 
 #ifndef EPSILON
-#define EPSILON 0.01
+#define EPSILON 0.1
 #endif
 
 #define CHECK_READ(a,b) if ((a)<(b)) {\
@@ -23,8 +23,14 @@ int main(int argc, char * argv[]) {
     FILE * input1;
     FILE * input2;
     input1 = fopen(argv[1], "rb");
+    if (input1 == NULL) {
+        perror("Input file");
+    }
     input2 = fopen(argv[2], "rb");
-    
+    if (input2 == NULL) {
+        perror("Input file");
+    }
+
     float buffer1[6];
     float buffer2[6];
 
@@ -46,26 +52,29 @@ int main(int argc, char * argv[]) {
     }
 
     int i;
-    for(i=0; i<nb_particles1; i++) {
-        CHECK_READ(fread(buffer1, sizeof(float), 6, input1), 6);
-        CHECK_READ(fread(buffer2, sizeof(float), 6, input2), 6);
-        if((abs(buffer1[0]-buffer2[0]) > EPSILON) ||
-            (abs(buffer1[1]-buffer2[1]) > EPSILON) ||
-            (abs(buffer1[2]-buffer2[2]) > EPSILON) ||
-            (abs(buffer1[3]-buffer2[3]) > EPSILON) ||
-            (abs(buffer1[4]-buffer2[4]) > EPSILON) ||
-            (abs(buffer1[5]-buffer2[5]) > EPSILON)) {
-            
-            #ifdef VERBOSE
-            fprintf(stderr, "%f\n", abs(buffer1[0]-buffer2[0]));
-            fprintf(stderr, "%f\n", abs(buffer1[1]-buffer2[1]));
-            fprintf(stderr, "%f\n", abs(buffer1[2]-buffer2[2]));
-            fprintf(stderr, "%f\n", abs(buffer1[3]-buffer2[3]));
-            fprintf(stderr, "%f\n", abs(buffer1[4]-buffer2[4]));
-            fprintf(stderr, "%f\n", abs(buffer1[5]-buffer2[5]));
-            #endif
+    int s;
+    for(s=0; s<iter1; s++) {
+        for(i=0; i<nb_particles1; i++) {
+            CHECK_READ(fread(buffer1, sizeof(float), 6, input1), 6);
+            CHECK_READ(fread(buffer2, sizeof(float), 6, input2), 6);
+            if((abs(buffer1[0]-buffer2[0]) > EPSILON) ||
+                (abs(buffer1[1]-buffer2[1]) > EPSILON) ||
+                (abs(buffer1[2]-buffer2[2]) > EPSILON) ||
+                (abs(buffer1[3]-buffer2[3]) > EPSILON) ||
+                (abs(buffer1[4]-buffer2[4]) > EPSILON) ||
+                (abs(buffer1[5]-buffer2[5]) > EPSILON)) {
+                
+                #ifdef VERBOSE
+                fprintf(stderr, "%f\n", abs(buffer1[0]-buffer2[0]));
+                fprintf(stderr, "%f\n", abs(buffer1[1]-buffer2[1]));
+                fprintf(stderr, "%f\n", abs(buffer1[2]-buffer2[2]));
+                fprintf(stderr, "%f\n", abs(buffer1[3]-buffer2[3]));
+                fprintf(stderr, "%f\n", abs(buffer1[4]-buffer2[4]));
+                fprintf(stderr, "%f\n", abs(buffer1[5]-buffer2[5]));
+                #endif
 
-            return EXIT_FAILURE;
+                return EXIT_FAILURE;
+            }
         }
     }
 

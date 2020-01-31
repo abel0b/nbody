@@ -6,6 +6,10 @@
 
 enum Initializer initializer = RANDOM_INITIALIZER;
 
+#ifdef DUMP
+FILE * output;
+#endif 
+
 void MoveParticles(const int nParticles, struct ParticleType* const particle, const float dt) {
   // Loop over particles that experience force
   #pragma acc loop
@@ -26,7 +30,11 @@ void MoveParticles(const int nParticles, struct ParticleType* const particle, co
           const float dy = particle[j].y - particle[i].y;
           const float dz = particle[j].z - particle[i].z;
           const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
+          #ifdef OPTIMIZE_POW
+          const float drPower32  = sqrtf(drSquared * drSquared * drSquared);
+          #else
           const float drPower32  = pow(drSquared, 3.0/2.0);
+          #endif  
             
           // Calculate the net force
           Fx += dx / drPower32;  
@@ -52,16 +60,6 @@ void MoveParticles(const int nParticles, struct ParticleType* const particle, co
 }
 
 void dump(int iter, int nParticles, struct ParticleType* particle) {
-    char filename[64];
-    snprintf(filename, 64, "data/nbody/%s-%d.nbody", VERSION, iter);
-    
-    FILE * output;
-    output = fopen(filename, "wb");
-
-    fwrite(&initializer, sizeof(enum Initializer), 1, output);
-    fwrite(&nParticles, sizeof(int), 1, output);
-    fwrite(&iter, sizeof(int), 1, output);
-
     int i;
     for (i = 0; i < nParticles; i++)
     {
@@ -72,8 +70,6 @@ void dump(int iter, int nParticles, struct ParticleType* particle) {
         fwrite(&particle[i].vy, sizeof(float), 1, output);
         fwrite(&particle[i].vz, sizeof(float), 1, output);
     }
-
-    fclose(output);
 }
 
 int main(const int argc, const char** argv)
@@ -90,6 +86,17 @@ int main(const int argc, const char** argv)
 
   // Initialize random number generator and particles
   srand48(0x2020);
+
+  // Open dump file
+  #ifdef DUMP
+  char filename[64];
+    snprintf(filename, 64, "data/nbody/%s.nbody", VERSION);
+     output = fopen(filename, "wb");
+    fwrite(&initializer, sizeof(enum Initializer), 1, output);
+    fwrite(&nParticles, sizeof(int), 1, output);
+    fwrite(&nSteps, sizeof(int), 1, output);
+    #endif
+
 
   int i;
   for (i = 0; i < nParticles; i++)
@@ -139,7 +146,9 @@ int main(const int argc, const char** argv)
   printf("-----------------------------------------------------\n");
   printf("* - warm-up, not included in average\n\n");
   free(particle);
-
+    #ifdef DUMP
+  fclose(output);
+#endif
   return EXIT_SUCCESS;
 }
 

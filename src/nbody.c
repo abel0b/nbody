@@ -6,6 +6,10 @@
 
 enum Initializer initializer = RANDOM_INITIALIZER;
 
+#ifdef DUMP
+FILE * output;
+#endif 
+
 void MoveParticles(const int nParticles, struct ParticleType* const particle, const float dt) {
 
   // Loop over particles that experience force
@@ -19,15 +23,20 @@ void MoveParticles(const int nParticles, struct ParticleType* const particle, co
       // No self interaction
       if (i != j) {
           // Avoid singularity and interaction with self
-          const float softening = 1e-20;
+          float softening = 1e-20;
 
           // Newton's law of universal gravity
-          const float dx = particle[j].x - particle[i].x;
-          const float dy = particle[j].y - particle[i].y;
-          const float dz = particle[j].z - particle[i].z;
-          const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
+          float dx = particle[j].x - particle[i].x;
+          float dy = particle[j].y - particle[i].y;
+          float dz = particle[j].z - particle[i].z;
+          float drSquared  = dx*dx + dy*dy + dz*dz + softening;
+          
+          #ifdef OPTIMIZE_POW
+          const float drPower32  = sqrtf(drSquared * drSquared * drSquared);
+          #else
           const float drPower32  = pow(drSquared, 3.0/2.0);
-            
+          #endif  
+          
           // Calculate the net force
           Fx += dx / drPower32;  
           Fy += dy / drPower32;  
@@ -69,20 +78,10 @@ void dump_text(int iter, int nParticles, struct ParticleType* particle) {
     fclose(f);
 }
 
+#ifdef DUMP
 void dump(int iter, int nParticles, struct ParticleType* particle) {
-    char filename[64];
-    snprintf(filename, 64, "data/nbody/%s-%d.nbody", VERSION, iter);
-    
-    FILE * output;
-    output = fopen(filename, "wb");
-
-    fwrite(&initializer, sizeof(enum Initializer), 1, output);
-    fwrite(&nParticles, sizeof(int), 1, output);
-    fwrite(&iter, sizeof(int), 1, output);
-
     int i;
-    for (i = 0; i < nParticles; i++)
-    {
+    for (i = 0; i < nParticles; i++) {
         fwrite(&particle[i].x, sizeof(float), 1, output);
         fwrite(&particle[i].y, sizeof(float), 1, output);
         fwrite(&particle[i].z, sizeof(float), 1, output);
@@ -90,9 +89,8 @@ void dump(int iter, int nParticles, struct ParticleType* particle) {
         fwrite(&particle[i].vy, sizeof(float), 1, output);
         fwrite(&particle[i].vz, sizeof(float), 1, output);
     }
-
-    fclose(output);
 }
+#endif
 
 int main(const int argc, const char** argv)
 {
@@ -108,6 +106,17 @@ int main(const int argc, const char** argv)
 
   // Initialize random number generator and particles
   srand48(0x2020);
+
+  #ifdef DUMP
+  // Open dump file
+    char filename[64];
+    snprintf(filename, 64, "data/nbody/%s.nbody", VERSION);
+     output = fopen(filename, "wb");
+
+    fwrite(&initializer, sizeof(enum Initializer), 1, output);
+    fwrite(&nParticles, sizeof(int), 1, output);
+    fwrite(&nSteps, sizeof(int), 1, output);
+  #endif
 
   int i;
   for (i = 0; i < nParticles; i++)
@@ -157,7 +166,10 @@ int main(const int argc, const char** argv)
   printf("-----------------------------------------------------\n");
   printf("* - warm-up, not included in average\n\n");
   free(particle);
-    return EXIT_SUCCESS;
+  #ifdef DUMP
+  fclose(output);
+  #endif
+  return EXIT_SUCCESS;
 }
 
 

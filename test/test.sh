@@ -12,7 +12,7 @@ echo "testing all nbody versions"
 echo "nb_particles=$nb_particles"
 echo "nb_iter=nb_iter"
 
-versions="baseline openacc cuda cuda-soa"
+versions="baseline baseline-optimized openacc cuda cuda-soa cuda-soa-optimized"
 
 function test() {
     pass=true
@@ -30,7 +30,7 @@ function test() {
 
     for version in $@
     do
-        ./bin/nbody-compare data/baseline-$nb_iter.nbody data/$version-$nb_iter.nbody
+        ./bin/nbody-compare data/nbody/baseline.nbody data/nbody/$version.nbody
         if [[ "$?" = "0" ]]
         then
             echo -e "$version .. ${green}OK$reset"

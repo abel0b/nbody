@@ -14,35 +14,53 @@ FILE * output;
 __global__ void UpdateParticle(const int nParticles, struct ParticleArray * const particle, const float dt) {
     int i; 
     int stride = blockDim.x * gridDim.x;
+    int block_id;
+    int block_tid;
+
+    extern __shared__ float local_data[];
+
+    float * local_particle_x = local_data;
+    float * local_particle_y = local_data + blockDim.x * sizeof(float);
+    float * local_particle_z = local_data + 2 * blockDim.x * sizeof(float);
 
     // Loop over particles that experience force
     for (i = blockIdx.x * blockDim.x + threadIdx.x; i < nParticles; i += stride) {
         // Components of the gravity force on particle i
     	float Fx = 0, Fy = 0, Fz = 0; 
-      
-    	// Loop over particles that exert force
-    	for (int j = 0; j < nParticles; j++) { 
-      	    // No self interaction
-      	    if (i != j) {
-		        // Avoid singularity and interaction with self
-		        const float softening = 1e-20;
+        float myx = particle->x[i];
+        float myy = particle->y[i];
+        float myz = particle->z[i];
 
-                // Newton's law of universal gravity
-                const float dx = particle->x[j] - particle->x[i];
-                const float dy = particle->y[j] - particle->y[i];
-                const float dz = particle->z[j] - particle->z[i];
-                const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
-                  #ifdef OPTIMIZE_POW
-                  const float drPower32  = sqrtf(drSquared * drSquared * drSquared);
-                  #else
-                  const float drPower32  = pow(drSquared, 3.0/2.0);
-                  #endif  
-                                
-                // Calculate the net force
-                Fx += dx / drPower32;  
-                Fy += dy / drPower32;  
-                Fz += dz / drPower32;
+        for(block_id = 0; block_id * blockDim.x < nParticles; block_id++) {
+            local_particle_x[threadIdx.x] = particle->x[block_id*blockDim.x+threadIdx.x];
+            local_particle_y[threadIdx.x] = particle->y[block_id*blockDim.x+threadIdx.x];
+            local_particle_z[threadIdx.x] = particle->z[block_id*blockDim.x+threadIdx.x];
+            __syncthreads();
+
+            // Loop over particles that exert force
+            for (block_tid = 0; block_tid < blockDim.x; block_tid++) {
+                if (i != block_id*blockDim.x+block_tid) {
+                    // Avoid singularity and interaction with self
+                    const float softening = 1e-20;
+
+                    // Newton's law of universal gravity
+                    const float dx = local_particle_x[block_tid] - myx;
+                    const float dy = local_particle_y[block_tid] - myy;
+                    const float dz = local_particle_z[block_tid] - myz;
+                    const float drSquared  = dx*dx + dy*dy + dz*dz + softening;
+                     #ifdef OPTIMIZE_POW
+                     const float drPower32  = sqrtf(drSquared * drSquared * drSquared);
+                     #else
+                     const float drPower32  = pow(drSquared, 3.0/2.0);
+                     #endif  
+                                    
+                    // Calculate the net force
+                    Fx += dx / drPower32;  
+                    Fy += dy / drPower32;  
+                    Fz += dz / drPower32;
+                }
             }
+            __syncthreads();
         }
 
         // Accelerate particles in response to the gravitational force
@@ -72,7 +90,7 @@ void MoveParticles(const int nParticles, struct ParticleArray * const particle, 
     cudaMemcpy(gpu_particle_tmp.vy, particle->vy, sizeof(float) * nParticles, cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_particle_tmp.vz, particle->vz, sizeof(float) * nParticles, cudaMemcpyHostToDevice);
     
-    UpdateParticle<<<(nParticles+255)/256,256>>>(nParticles, gpu_particle, dt);
+    UpdateParticle<<<(nParticles+255)/256,256,sizeof(float)*3*256>>>(nParticles, gpu_particle, dt);
   
     cudaMemcpy(particle->x, gpu_particle_tmp.x, sizeof(float) * nParticles, cudaMemcpyDeviceToHost); 
     cudaMemcpy(particle->y, gpu_particle_tmp.y, sizeof(float) * nParticles, cudaMemcpyDeviceToHost);
